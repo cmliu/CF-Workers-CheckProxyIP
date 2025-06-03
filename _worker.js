@@ -1479,7 +1479,7 @@ curl "https://${hostname}/check?proxyip=1.2.3.4:443"
         const responseTimeHTML = data.responseTime && data.responseTime > 0 ? 
           \`<div class="tooltip">
             <span style="background: var(--success-color); color: white; padding: 4px 8px; border-radius: 6px; font-weight: 600; font-size: 14px;">\${data.responseTime}ms</span>
-            <span class="tooltiptext">该延迟并非 <strong>您当前网络</strong> 到 ProxyIP 的实际延迟，<br>而是 <strong>Cloudflare \${data.colo || 'CF'} 机房 </strong>到 ProxyIP 的响应时间。</span>
+            <span class="tooltiptext">该延迟并非 <strong>您当前网络</strong> 到 ProxyIP 的实际延迟，<br>而是 <strong>Cloudflare.\${data.colo || 'CF'} 机房</strong> 到 ProxyIP 的响应时间。</span>
           </div>\` : 
           '<span style="color: var(--text-light);">延迟未知</span>';
         
