@@ -123,8 +123,9 @@ curl "https://check.proxyip.cmliussss.net/check?proxyip=1.2.3.4:443&token=your-s
 | `success` | boolean | 代理IP是否可用 |
 | `proxyIP` | string | 检测的IP地址（失败时为 -1） |
 | `portRemote` | number | 使用的端口号（失败时为 -1） |
-| `statusCode` | number | HTTP状态码 |
-| `responseSize` | number | 响应数据大小（字节） |
+| `colo` | string | 执行此次请求的Cloudflare机房代码 |
+| `responseTime` | string | 响应时间（成功时为毫秒，失败时为 -1） |
+| `message` | string | 检测结果说明信息 |
 | `timestamp` | string | 检测时间戳 |
 
 ## 🔧 环境变量配置
