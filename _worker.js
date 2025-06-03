@@ -246,7 +246,7 @@ async function CheckProxyIP(proxyIP) {
       success: isSuccessful[0],
       proxyIP: proxyIP,
       portRemote: portRemote,
-      responseTime: isSuccessful[2] ? isSuccessful[2] + 'ms' : null,
+      responseTime: isSuccessful[2] ? isSuccessful[2] : -1,
       message: isSuccessful[1],
       timestamp: new Date().toISOString(),
     };
@@ -386,7 +386,7 @@ async function 验证反代IP(反代IP地址, 指定端口) {
   }
 
   // 所有重试都失败了
-  return [false, 最后错误 || '连接验证失败', null];
+  return [false, 最后错误 || '连接验证失败', -1];
 }
 
 function 构建TLS握手() {
@@ -1116,7 +1116,7 @@ curl "https://${hostname}/check?proxyip=1.2.3.4:443"
 &nbsp;&nbsp;"success": true|false, // 代理 IP 是否有效<br>
 &nbsp;&nbsp;"proxyIP": "1.2.3.4", // 如果有效,返回代理 IP,否则为 -1<br>
 &nbsp;&nbsp;"portRemote": 443, // 如果有效,返回端口,否则为 -1<br>
-&nbsp;&nbsp;"responseTime": "166ms", // 如果有效,返回响应时间,否则为 null<br>
+&nbsp;&nbsp;"responseTime": "166", // 如果有效,返回响应毫秒时间,否则为 -1<br>
 &nbsp;&nbsp;"message": "第1次验证有效ProxyIP", // 返回验证信息<br>
 &nbsp;&nbsp;"timestamp": "2025-06-03T17:27:52.946Z" // 检查时间<br>
 }<br>
@@ -1406,7 +1406,7 @@ curl "https://${hostname}/check?proxyip=1.2.3.4:443"
                 <strong>🌐 ProxyIP 地址:</strong>
                 \${createCopyButton(data.proxyIP)}
                 \${ipInfoHTML}
-                <span style="background: var(--success-color); color: white; padding: 4px 8px; border-radius: 6px; font-weight: 600; font-size: 14px;">\${data.responseTime || '延迟未知'}</span>
+                <span style="background: var(--success-color); color: white; padding: 4px 8px; border-radius: 6px; font-weight: 600; font-size: 14px;">\${data.responseTime + 'ms' || '延迟未知'}</span>
               </div>
               <p><strong>🔌 端口:</strong> \${createCopyButton(data.portRemote.toString())}</p>
               <p><strong>🕒 检测时间:</strong> \${new Date(data.timestamp).toLocaleString()}</p>
@@ -1535,7 +1535,7 @@ curl "https://${hostname}/check?proxyip=1.2.3.4:443"
         if (result.success) {
           itemElement.style.background = 'linear-gradient(135deg, #d4edda, #c3e6cb)';
           itemElement.style.borderColor = 'var(--success-color)';
-          statusIcon.innerHTML = \`<span style="background: var(--success-color); color: white; padding: 2px 6px; border-radius: 4px; font-size: 12px; font-weight: 600;">\${result.responseTime || '延迟未知'}</span>\`;
+          statusIcon.innerHTML = \`<span style="background: var(--success-color); color: white; padding: 2px 6px; border-radius: 4px; font-size: 12px; font-weight: 600;">\${result.responseTime + 'ms' || '延迟未知'}</span>\`;
           statusIcon.className = 'status-icon status-success';
         } else {
           itemElement.style.background = 'linear-gradient(135deg, #f8d7da, #f5c6cb)';
