@@ -36,9 +36,9 @@ export default {
 
       // 获取参数中的IP或使用默认IP
       const proxyIP = url.searchParams.get('proxyip').toLowerCase();
-
+      const colo = request.cf?.colo || 'CF';
       // 调用CheckProxyIP函数
-      const result = await CheckProxyIP(proxyIP);
+      const result = await CheckProxyIP(proxyIP, colo);
 
       // 返回JSON响应，根据检查结果设置不同的状态码
       return new Response(JSON.stringify(result, null, 2), {
@@ -225,7 +225,7 @@ async function resolveDomain(domain) {
   }
 }
 
-async function CheckProxyIP(proxyIP) {
+async function CheckProxyIP(proxyIP, colo) {
   let portRemote = 443;
   if (proxyIP.includes('.tp')) {
     const portMatch = proxyIP.match(/\.tp(\d+)\./);
@@ -237,15 +237,14 @@ async function CheckProxyIP(proxyIP) {
     portRemote = parseInt(proxyIP.split(':')[1]);
     proxyIP = proxyIP.split(':')[0];
   }
-
   try {
     const isSuccessful = await 验证反代IP(proxyIP, portRemote);
-
     // 构建JSON响应
     const jsonResponse = {
       success: isSuccessful[0],
       proxyIP: proxyIP,
       portRemote: portRemote,
+      colo: colo,
       responseTime: isSuccessful[2] ? isSuccessful[2] : -1,
       message: isSuccessful[1],
       timestamp: new Date().toISOString(),
@@ -257,6 +256,7 @@ async function CheckProxyIP(proxyIP) {
       success: false,
       proxyIP: -1,
       portRemote: -1,
+      colo: colo,
       message: error.message || error.toString(),
       timestamp: new Date().toISOString()
     };
