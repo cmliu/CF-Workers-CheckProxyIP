@@ -1638,7 +1638,7 @@ curl "https://${hostname}/check?proxyip=1.2.3.4:443"
           const responseTimeHTML = result.responseTime && result.responseTime > 0 ? 
             \`<div class="tooltip">
               <span style="background: var(--success-color); color: white; padding: 2px 6px; border-radius: 4px; font-size: 12px; font-weight: 600;">\${result.responseTime}ms</span>
-              <span class="tooltiptext">该延迟并非 <strong>您当前网络</strong> 到 ProxyIP 的实际延迟，<br>而是 <strong>Cloudflare.\${data.colo || 'CF'} 机房</strong> 到 ProxyIP 的响应时间。</span>
+              <span class="tooltiptext">该延迟并非 <strong>您当前网络</strong> 到 ProxyIP 的实际延迟，<br>而是 <strong>Cloudflare.\${result.colo || 'CF'} 机房</strong> 到 ProxyIP 的响应时间。</span>
             </div>\` : 
             '<span style="color: var(--text-light); font-size: 12px;">延迟未知</span>';
             
