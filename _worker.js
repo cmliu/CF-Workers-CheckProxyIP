@@ -226,7 +226,6 @@ async function resolveDomain(domain) {
 }
 
 async function CheckProxyIP(proxyIP) {
-  //const portRemote = proxyIP.includes('.tp') ? parseInt(proxyIP.split('.tp')[1].split('.')[0]) || 443 : 443;
   let portRemote = 443;
   if (proxyIP.includes('.tp')) {
     const portMatch = proxyIP.match(/\.tp(\d+)\./);
@@ -239,86 +238,18 @@ async function CheckProxyIP(proxyIP) {
     proxyIP = proxyIP.split(':')[0];
   }
 
-  const tcpSocket = connect({
-    hostname: proxyIP,
-    port: portRemote,
-  });
-
   try {
-    // 构建HTTP GET请求
-    const httpRequest =
-      "GET /cdn-cgi/trace HTTP/1.1\r\n" +
-      "Host: speed.cloudflare.com\r\n" +
-      "User-Agent: CheckProxyIP/cmliu\r\n" +
-      "Connection: close\r\n\r\n";
-
-    // 发送HTTP请求
-    const writer = tcpSocket.writable.getWriter();
-    await writer.write(new TextEncoder().encode(httpRequest));
-    writer.releaseLock();
-
-    // 读取HTTP响应
-    const reader = tcpSocket.readable.getReader();
-    let responseData = new Uint8Array(0);
-    let receivedData = false;
-
-    // 读取所有可用数据
-    while (true) {
-      const { value, done } = await Promise.race([
-        reader.read(),
-        new Promise(resolve => setTimeout(() => resolve({ done: true }), 5000)) // 5秒超时
-      ]);
-
-      if (done) break;
-      if (value) {
-        receivedData = true;
-        // 合并数据
-        const newData = new Uint8Array(responseData.length + value.length);
-        newData.set(responseData);
-        newData.set(value, responseData.length);
-        responseData = newData;
-
-        // 检查是否接收到完整响应
-        const responseText = new TextDecoder().decode(responseData);
-        if (responseText.includes("\r\n\r\n") &&
-          (responseText.includes("Connection: close") || responseText.includes("content-length"))) {
-          break;
-        }
-      }
-    }
-    reader.releaseLock();
-
-    // 解析HTTP响应
-    const responseText = new TextDecoder().decode(responseData);
-    const statusMatch = responseText.match(/^HTTP\/\d\.\d\s+(\d+)/i);
-    const statusCode = statusMatch ? parseInt(statusMatch[1]) : null;
-
-    // 判断是否成功
-    function isValidProxyResponse(responseText, responseData) {
-      const statusMatch = responseText.match(/^HTTP\/\d\.\d\s+(\d+)/i);
-      const statusCode = statusMatch ? parseInt(statusMatch[1]) : null;
-      const looksLikeCloudflare = responseText.includes("cloudflare");
-      const isExpectedError = responseText.includes("plain HTTP request") || responseText.includes("400 Bad Request");
-      const hasBody = responseData.length > 100;
-
-      return statusCode !== null && looksLikeCloudflare && isExpectedError && hasBody;
-    }
-    const isSuccessful = isValidProxyResponse(responseText, responseData);
+    const isSuccessful = await 验证反代IP(proxyIP, portRemote);
 
     // 构建JSON响应
     const jsonResponse = {
-      success: isSuccessful,
+      success: isSuccessful[0],
       proxyIP: proxyIP,
       portRemote: portRemote,
-      statusCode: statusCode || null,
-      responseSize: responseData.length,
-      responseData: responseText,
+      responseTime: isSuccessful[2] ? isSuccessful[2] + 'ms' : null,
+      message: isSuccessful[1],
       timestamp: new Date().toISOString(),
     };
-
-    // 关闭连接
-    await tcpSocket.close();
-
     return jsonResponse;
   } catch (error) {
     // 连接失败，返回失败的JSON
@@ -326,8 +257,8 @@ async function CheckProxyIP(proxyIP) {
       success: false,
       proxyIP: -1,
       portRemote: -1,
-      timestamp: new Date().toISOString(),
-      error: error.message || error.toString()
+      message: error.message || error.toString(),
+      timestamp: new Date().toISOString()
     };
   }
 }
@@ -354,6 +285,139 @@ async function 双重哈希(文本) {
   const 第二次十六进制 = 第二次哈希数组.map(字节 => 字节.toString(16).padStart(2, '0')).join('');
 
   return 第二次十六进制.toLowerCase();
+}
+
+async function 验证反代IP(反代IP地址, 指定端口) {
+  const 最大重试次数 = 4;
+  let 最后错误 = null;
+  const 开始时间 = performance.now();
+  // 对于连接级别的重试，每次都重新建立连接
+  for (let 重试次数 = 0; 重试次数 < 最大重试次数; 重试次数++) {
+    let TCP接口 = null;
+    let 传输数据 = null;
+    let 读取数据 = null;
+
+    try {
+      // 每次重试都重新建立连接
+      const 连接超时 = 1000 + (重试次数 * 500); // 递增超时时间
+      TCP接口 = await 带超时连接({ hostname: 反代IP地址, port: 指定端口 }, 连接超时);
+
+      传输数据 = TCP接口.writable.getWriter();
+      读取数据 = TCP接口.readable.getReader();
+
+      // 发送TLS握手
+      await 传输数据.write(构建TLS握手());
+
+      // 读取响应，超时时间也递增
+      const 读取超时 = 连接超时;
+      const { value: 返回数据, 超时 } = await 带超时读取(读取数据, 读取超时);
+
+      if (超时) {
+        最后错误 = `第${重试次数 + 1}次重试：读取响应超时`;
+        throw new Error(最后错误);
+      }
+
+      if (!返回数据 || 返回数据.length === 0) {
+        最后错误 = `第${重试次数 + 1}次重试：未收到任何响应数据`;
+        throw new Error(最后错误);
+      }
+
+      // 检查TLS响应
+      if (返回数据[0] === 0x16) {
+        // 成功，清理资源
+        try {
+          读取数据.cancel();
+          TCP接口.close();
+        } catch (cleanupError) {
+          console.log('清理资源时出错:', cleanupError);
+        }
+        return [true, `第${重试次数 + 1}次验证有效ProxyIP`, Math.round(performance.now() - 开始时间)];
+      } else {
+        最后错误 = `第${重试次数 + 1}次重试：收到非TLS响应(0x${返回数据[0].toString(16).padStart(2, '0')})`;
+        throw new Error(最后错误);
+      }
+
+    } catch (error) {
+      // 记录具体错误
+      最后错误 = `第${重试次数 + 1}次重试失败: ${error.message || error.toString()}`;
+
+      // 判断是否应该继续重试
+      const 错误信息 = error.message || error.toString();
+      const 不应重试的错误 = [
+        '连接被拒绝',
+        'Connection refused',
+        '网络不可达',
+        'Network unreachable',
+        '主机不可达',
+        'Host unreachable'
+      ];
+
+      const 应该停止重试 = 不应重试的错误.some(errorPattern =>
+        错误信息.toLowerCase().includes(errorPattern.toLowerCase())
+      );
+
+      if (应该停止重试) {
+        最后错误 = `连接失败，无需重试: ${错误信息}`;
+        break; // 跳出重试循环
+      }
+
+    } finally {
+      // 确保每次重试后都清理资源
+      try {
+        if (读取数据) {
+          读取数据.cancel();
+        }
+        if (TCP接口) {
+          TCP接口.close();
+        }
+      } catch (cleanupError) {
+        console.log('清理资源时出错:', cleanupError);
+      }
+
+      // 等待资源完全释放
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+
+    // 如果不是最后一次重试，等待一段时间再重试
+    if (重试次数 < 最大重试次数 - 1) {
+      const 等待时间 = 200 + (重试次数 * 300); // 递增等待时间
+      await new Promise(resolve => setTimeout(resolve, 等待时间));
+    }
+  }
+
+  // 所有重试都失败了
+  return [false, 最后错误 || '连接验证失败', null];
+}
+
+function 构建TLS握手() {
+  const hexStr =
+    '16030107a30100079f0303af1f4d78be2002cf63e8c727224cf1ee4a8ac89a0ad04bc54cbed5cd7c830880203d8326ae1d1d076ec749df65de6d21dec7371c589056c0a548e31624e121001e0020baba130113021303c02bc02fc02cc030cca9cca8c013c014009c009d002f0035010007361a1a0000000a000c000acaca11ec001d00170018fe0d00ba0000010001fc00206a2fb0535a0a5e565c8a61dcb381bab5636f1502bbd09fe491c66a2d175095370090dd4d770fc5e14f4a0e13cfd919a532d04c62eb4a53f67b1375bf237538cea180470d942bdde74611afe80d70ad25afb1d5f02b2b4eed784bc2420c759a742885f6ca982b25d0fdd7d8f618b7f7bc10172f61d446d8f8a6766f3587abbae805b8ef40fcb819194ac49e91c6c3762775f8dc269b82a21ddccc9f6f43be62323147b411475e47ea2c4efe52ef2cef5c7b32000d00120010040308040401050308050501080606010010000e000c02683208687474702f312e31000b0002010000050005010000000044cd00050003026832001b00030200020017000000230000002d000201010012000000000010000e00000b636861746770742e636f6dff01000100002b0007061a1a03040303003304ef04edcaca00010011ec04c05eac5510812e46c13826d28279b13ce62b6464e01ae1bb6d49640e57fb3191c656c4b0167c246930699d4f467c19d60dacaa86933a49e5c97390c3249db33c1aa59f47205701419461569cb01a22b4378f5f3bb21d952700f250a6156841f2cc952c75517a481112653400913f9ab58982a3f2d0010aba5ae99a2d69f6617a4220cd616de58ccbf5d10c5c68150152b60e2797521573b10413cb7a3aab25409d426a5b64a9f3134e01dc0dd0fc1a650c7aafec00ca4b4dddb64c402252c1c69ca347bb7e49b52b214a7768657a808419173bcbea8aa5a8721f17c82bc6636189b9ee7921faa76103695a638585fe678bcbb8725831900f808863a74c52a1b2caf61f1dec4a9016261c96720c221f45546ce0e93af3276dd090572db778a865a07189ae4f1a64c6dbaa25a5b71316025bd13a6012994257929d199a7d90a59285c75bd4727a8c93484465d62379cd110170073aad2a3fd947087634574315c09a7ccb60c301d59a7c37a330253a994a6857b8556ce0ac3cda4c6fe3855502f344c0c8160313a3732bce289b6bda207301e7b318277331578f370ccbcd3730890b552373afeb162c0cb59790f79559123b2d437308061608a704626233d9f73d18826e27f1c00157b792460eda9b35d48b4515a17c6125bdb96b114503c99e7043b112a398888318b956a012797c8a039a51147b8a58071793c14a3611fb0424e865f48a61cac7c43088c634161cea089921d229e1a370effc5eff2215197541394854a201a6ebf74942226573bb95710454bd27a52d444690837d04611b676269873c50c3406a79077e6606478a841f96f7b076a2230fd34f3eea301b77bf00750c28357a9df5b04f192b9c0bbf4f71891f1842482856b021280143ae74356c5e6a8e3273893086a90daa7a92426d8c370a45e3906994b8fa7a57d66b503745521e40948e83641de2a751b4a836da54f2da413074c3d856c954250b5c8332f1761e616437e527c0840bc57d522529b9259ccac34d7a3888f0aade0a66c392458cc1a698443052413217d29fbb9a1124797638d76100f82807934d58f30fcff33197fc171cfa3b0daa7f729591b1d7389ad476fde2328af74effd946265b3b81fa33066923db476f71babac30b590e05a7ba2b22f86925abca7ef8058c2481278dd9a240c8816bba6b5e6603e30670dffa7e6e3b995b0b18ec404614198a43a07897d84b439878d179c7d6895ac3f42ecb7998d4491060d2b8a5316110830c3f20a3d9a488a85976545917124c1eb6eb7314ea9696712b7bcab1cfd2b66e5a85106b2f651ab4b8a145e18ac41f39a394da9f327c5c92d4a297a0c94d1b8dcc3b111a700ac8d81c45f983ca029fd2887ad4113c7a23badf807c6d0068b4fa7148402aae15cc55971b57669a4840a22301caaec392a6ea6d46dab63890594d41545ebc2267297e3f4146073814bb3239b3e566684293b9732894193e71f3b388228641bb8be6f5847abb9072d269cb40b353b6aa3259ccb7e438d6a37ffa8cc1b7e4911575c41501321769900d19792aa3cfbe58b0aaf91c91d3b63900697279ad6c1aa44897a07d937e0d5826c24439420ca5d8a63630655ce9161e58d286fc885fcd9b19d096080225d16c89939a24aa1e98632d497b5604073b13f65bdfddc1de4b40d2a829b0521010c5f0f241b1ccc759049579db79983434fac2748829b33f001d0020a8e86c9d3958e0257c867e59c8082238a1ea0a9f2cac9e41f9b3cb0294f34b484a4a000100002900eb00c600c0afc8dade37ae62fa550c8aa50660d8e73585636748040b8e01d67161878276b1ec1ee2aff7614889bb6a36d2bdf9ca097ff6d7bf05c4de1d65c2b8db641f1c8dfbd59c9f7e0fed0b8e0394567eda55173d198e9ca40883b291ab4cada1a91ca8306ca1c37e047ebfe12b95164219b06a24711c2182f5e37374d43c668d45a3ca05eda90e90e510e628b4cfa7ae880502dae9a70a8eced26ad4b3c2f05d77f136cfaa622e40eb084dd3eb52e23a9aeff6ae9018100af38acfd1f6ce5d8c53c4a61c547258002120fe93e5c7a5c9c1a04bf06858c4dd52b01875844e15582dd566d03f41133183a0';
+  return new Uint8Array(hexStr.match(/.{1,2}/g).map(b => parseInt(b, 16)));
+}
+
+async function 带超时连接({ hostname, port }, 超时时间) {
+  const TCP接口 = connect({ hostname, port });
+  try {
+    await Promise.race([
+      TCP接口.opened,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("连接超时")), 超时时间)
+      ),
+    ]);
+    return TCP接口; // ✅ 连接成功
+  } catch (err) {
+    TCP接口.close?.(); // 确保连接关闭
+    throw err; // ⛔ 抛出错误由调用者处理
+  }
+}
+function 带超时读取(reader, 超时) {
+  return new Promise(resolve => {
+    const timeoutId = setTimeout(() => resolve({ done: true, value: null, 超时: true }), 超时);
+    reader.read().then(result => {
+      clearTimeout(timeoutId);
+      resolve({ ...result, 超时: false });
+    });
+  });
 }
 
 async function nginx() {
@@ -1052,7 +1116,9 @@ curl "https://${hostname}/check?proxyip=1.2.3.4:443"
 &nbsp;&nbsp;"success": true|false, // 代理 IP 是否有效<br>
 &nbsp;&nbsp;"proxyIP": "1.2.3.4", // 如果有效,返回代理 IP,否则为 -1<br>
 &nbsp;&nbsp;"portRemote": 443, // 如果有效,返回端口,否则为 -1<br>
-&nbsp;&nbsp;"timestamp": "2025-05-10T14:44:30.597Z" // 检查时间<br>
+&nbsp;&nbsp;"responseTime": "166ms", // 如果有效,返回响应时间,否则为 null<br>
+&nbsp;&nbsp;"message": "第1次验证有效ProxyIP", // 返回验证信息<br>
+&nbsp;&nbsp;"timestamp": "2025-06-03T17:27:52.946Z" // 检查时间<br>
 }<br>
       </div>
     </div>
@@ -1340,7 +1406,7 @@ curl "https://${hostname}/check?proxyip=1.2.3.4:443"
                 <strong>🌐 ProxyIP 地址:</strong>
                 \${createCopyButton(data.proxyIP)}
                 \${ipInfoHTML}
-                <span style="color: var(--success-color); font-weight: 600; font-size: 18px;">✅</span>
+                <span style="background: var(--success-color); color: white; padding: 4px 8px; border-radius: 6px; font-weight: 600; font-size: 14px;">\${data.responseTime || '延迟未知'}</span>
               </div>
               <p><strong>🔌 端口:</strong> \${createCopyButton(data.portRemote.toString())}</p>
               <p><strong>🕒 检测时间:</strong> \${new Date(data.timestamp).toLocaleString()}</p>
@@ -1469,10 +1535,8 @@ curl "https://${hostname}/check?proxyip=1.2.3.4:443"
         if (result.success) {
           itemElement.style.background = 'linear-gradient(135deg, #d4edda, #c3e6cb)';
           itemElement.style.borderColor = 'var(--success-color)';
-          statusIcon.textContent = '✅';
+          statusIcon.innerHTML = \`<span style="background: var(--success-color); color: white; padding: 2px 6px; border-radius: 4px; font-size: 12px; font-weight: 600;">\${result.responseTime || '延迟未知'}</span>\`;
           statusIcon.className = 'status-icon status-success';
-          statusIcon.style.color = 'var(--success-color)';
-          statusIcon.style.fontSize = '18px';
         } else {
           itemElement.style.background = 'linear-gradient(135deg, #f8d7da, #f5c6cb)';
           itemElement.style.borderColor = 'var(--error-color)';

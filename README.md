@@ -102,9 +102,9 @@ curl "https://check.proxyip.cmliussss.net/check?proxyip=1.2.3.4:443&token=your-s
   "success": true,
   "proxyIP": "1.2.3.4",
   "portRemote": 443,
-  "statusCode": 400,
-  "responseSize": 1234,
-  "timestamp": "2025-01-20T10:30:00.000Z"
+  "responseTime": "1320ms",
+  "message": "第3次验证有效ProxyIP",
+  "timestamp": "2025-06-03T17:21:25.045Z"
 }
 ```
 
@@ -140,6 +140,6 @@ curl "https://check.proxyip.cmliussss.net/check?proxyip=1.2.3.4:443&token=your-s
 本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情
 
 ## 🙏 致谢
-
+- [@houyiTFG](https://t.me/houyiTFG) - 天书作者
 - [Cloudflare Workers](https://workers.cloudflare.com/) - 提供强大的边缘计算平台
 - 所有贡献者和使用者的支持
