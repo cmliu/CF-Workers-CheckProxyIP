@@ -102,6 +102,7 @@ curl "https://check.proxyip.cmliussss.net/check?proxyip=1.2.3.4:443&token=your-s
   "success": true,
   "proxyIP": "1.2.3.4",
   "portRemote": 443,
+  "colo": "HKG",
   "responseTime": "1320ms",
   "message": "第3次验证有效ProxyIP",
   "timestamp": "2025-06-03T17:21:25.045Z"

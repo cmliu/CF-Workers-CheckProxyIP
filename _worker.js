@@ -225,7 +225,7 @@ async function resolveDomain(domain) {
   }
 }
 
-async function CheckProxyIP(proxyIP, colo) {
+async function CheckProxyIP(proxyIP, colo = 'CF') {
   let portRemote = 443;
   if (proxyIP.includes('.tp')) {
     const portMatch = proxyIP.match(/\.tp(\d+)\./);
@@ -257,6 +257,7 @@ async function CheckProxyIP(proxyIP, colo) {
       proxyIP: -1,
       portRemote: -1,
       colo: colo,
+      responseTime: -1,
       message: error.message || error.toString(),
       timestamp: new Date().toISOString()
     };
@@ -993,6 +994,83 @@ async function HTML(hostname, 网站图标) {
       transform: translateY(0);
       opacity: 1;
     }
+    
+    .tooltip {
+      position: relative;
+      display: inline-block;
+      cursor: help;
+    }
+    
+    .tooltip .tooltiptext {
+      visibility: hidden;
+      /* 气泡宽度 - 可调整以适应内容长度 */
+      width: 420px;
+      /* 气泡背景色 */
+      background-color: #2c3e50;
+      /* 气泡文字颜色 */
+      color: #fff;
+      /* 文字对齐方式 */
+      text-align: left;
+      /* 气泡圆角大小 */
+      border-radius: 8px;
+      /* 气泡内边距 - 上下 左右 */
+      padding: 12px 16px;
+      /* 定位方式 - fixed相对于浏览器窗口定位 */
+      position: fixed;
+      /* 层级 - 确保在最上层显示 */
+      z-index: 9999;
+      /* 垂直位置 - 50%表示距离顶部50% */
+      top: 50%;
+      /* 水平位置 - 50%表示距离左边50% */
+      left: 50%;
+      /* 居中对齐 - 向左偏移自身宽度的50%，向上偏移自身高度的50% */
+      transform: translate(-50%, -50%);
+      /* 初始透明度 */
+      opacity: 0;
+      /* 过渡动画时间 */
+      transition: opacity 0.3s;
+      /* 阴影效果 - 水平偏移 垂直偏移 模糊半径 颜色 */
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      /* 字体大小 */
+      font-size: 14px;
+      /* 行高 */
+      line-height: 1.4;
+      /* 字体粗细 */
+      font-weight: 400;
+      /* 边框 */
+      border: 1px solid rgba(255,255,255,0.1);
+      /* 背景模糊效果 */
+      backdrop-filter: blur(10px);
+      /* 最大宽度 - 防止在小屏幕上超出边界 */
+      max-width: 90vw;
+      /* 最大高度 - 防止内容过多时超出屏幕 */
+      max-height: 80vh;
+      /* 内容溢出时显示滚动条 */
+      overflow-y: auto;
+    }
+    
+    .tooltip .tooltiptext::after {
+      /* 移除箭头 - 由于居中显示，箭头不再需要 */
+      display: none;
+    }
+    
+    .tooltip:hover .tooltiptext {
+      visibility: visible;
+      opacity: 1;
+    }
+    
+    @media (max-width: 768px) {
+      .tooltip .tooltiptext {
+        /* 移动端气泡宽度 */
+        width: 90vw;
+        /* 移动端最大宽度 */
+        max-width: 90vw;
+        /* 移动端字体大小 */
+        font-size: 13px;
+        /* 移动端内边距调整 */
+        padding: 10px 12px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -1116,6 +1194,7 @@ curl "https://${hostname}/check?proxyip=1.2.3.4:443"
 &nbsp;&nbsp;"success": true|false, // 代理 IP 是否有效<br>
 &nbsp;&nbsp;"proxyIP": "1.2.3.4", // 如果有效,返回代理 IP,否则为 -1<br>
 &nbsp;&nbsp;"portRemote": 443, // 如果有效,返回端口,否则为 -1<br>
+&nbsp;&nbsp;"colo": "HKG", // 执行此次请求的Cloudflare机房<br>
 &nbsp;&nbsp;"responseTime": "166", // 如果有效,返回响应毫秒时间,否则为 -1<br>
 &nbsp;&nbsp;"message": "第1次验证有效ProxyIP", // 返回验证信息<br>
 &nbsp;&nbsp;"timestamp": "2025-06-03T17:27:52.946Z" // 检查时间<br>
@@ -1397,6 +1476,12 @@ curl "https://${hostname}/check?proxyip=1.2.3.4:443"
       if (data.success) {
         const ipInfo = await getIPInfo(data.proxyIP);
         const ipInfoHTML = formatIPInfo(ipInfo);
+        const responseTimeHTML = data.responseTime && data.responseTime > 0 ? 
+          \`<div class="tooltip">
+            <span style="background: var(--success-color); color: white; padding: 4px 8px; border-radius: 6px; font-weight: 600; font-size: 14px;">\${data.responseTime}ms</span>
+            <span class="tooltiptext">该延迟并非 <strong>您当前网络</strong> 到 ProxyIP 的实际延迟，<br>而是 <strong>Cloudflare \${data.colo || 'CF'} 机房 </strong>到 ProxyIP 的响应时间。</span>
+          </div>\` : 
+          '<span style="color: var(--text-light);">延迟未知</span>';
         
         resultDiv.innerHTML = \`
           <div class="result-card result-success">
@@ -1406,9 +1491,10 @@ curl "https://${hostname}/check?proxyip=1.2.3.4:443"
                 <strong>🌐 ProxyIP 地址:</strong>
                 \${createCopyButton(data.proxyIP)}
                 \${ipInfoHTML}
-                <span style="background: var(--success-color); color: white; padding: 4px 8px; border-radius: 6px; font-weight: 600; font-size: 14px;">\${data.responseTime + 'ms' || '延迟未知'}</span>
+                \${responseTimeHTML}
               </div>
               <p><strong>🔌 端口:</strong> \${createCopyButton(data.portRemote.toString())}</p>
+              <p><strong>🏢 机房信息:</strong> \${data.colo || 'CF'}</p>
               <p><strong>🕒 检测时间:</strong> \${new Date(data.timestamp).toLocaleString()}</p>
             </div>
           </div>
@@ -1423,7 +1509,9 @@ curl "https://${hostname}/check?proxyip=1.2.3.4:443"
                 \${createCopyButton(proxyip)}
                 <span style="color: var(--error-color); font-weight: 600; font-size: 18px;">❌</span>
               </div>
-              \${data.error ? \`<p><strong>错误信息:</strong> \${data.error}</p>\` : ''}
+              <p><strong>🔌 端口:</strong> \${data.portRemote && data.portRemote !== -1 ? createCopyButton(data.portRemote.toString()) : '未知'}</p>
+              <p><strong>🏢 机房信息:</strong> \${data.colo || 'CF'}</p>
+              \${data.message ? \`<p><strong>错误信息:</strong> \${data.message}</p>\` : ''}
               <p><strong>🕒 检测时间:</strong> \${new Date(data.timestamp).toLocaleString()}</p>
             </div>
           </div>
@@ -1471,6 +1559,7 @@ curl "https://${hostname}/check?proxyip=1.2.3.4:443"
           <div style="margin-top: 20px;">
             <p><strong>🌐 ProxyIP 域名:</strong> \${createCopyButton(cleanDomain)}</p>
             <p><strong>🔌 端口:</strong> \${createCopyButton(portRemote.toString())}</p>
+            <p><strong>🏢 机房信息:</strong> <span id="domain-colo">检测中...</span></p>
             <p><strong>📋 发现IP:</strong> \${ips.length} 个</p>
             <p><strong>🕒 解析时间:</strong> \${new Date().toLocaleString()}</p>
           </div>
@@ -1496,10 +1585,20 @@ curl "https://${hostname}/check?proxyip=1.2.3.4:443"
       
       await Promise.all([...checkPromises, ...ipInfoPromises]);
       
-      // 使用缓存的结果更新整体状态
+      // 使用缓存的结果更新整体状态和机房信息
       const validCount = Array.from(ipCheckResults.values()).filter(r => r.success).length;
       const totalCount = ips.length;
       const resultCard = resultDiv.querySelector('.result-card');
+      
+      // 获取第一个有效结果的colo信息
+      const firstValidResult = Array.from(ipCheckResults.values()).find(r => r.success && r.colo);
+      const coloInfo = firstValidResult?.colo || 'CF';
+      
+      // 更新机房信息
+      const coloElement = document.getElementById('domain-colo');
+      if (coloElement) {
+        coloElement.textContent = coloInfo;
+      }
       
       if (validCount === totalCount) {
         resultCard.className = 'result-card result-success';
@@ -1535,7 +1634,15 @@ curl "https://${hostname}/check?proxyip=1.2.3.4:443"
         if (result.success) {
           itemElement.style.background = 'linear-gradient(135deg, #d4edda, #c3e6cb)';
           itemElement.style.borderColor = 'var(--success-color)';
-          statusIcon.innerHTML = \`<span style="background: var(--success-color); color: white; padding: 2px 6px; border-radius: 4px; font-size: 12px; font-weight: 600;">\${result.responseTime + 'ms' || '延迟未知'}</span>\`;
+          
+          const responseTimeHTML = result.responseTime && result.responseTime > 0 ? 
+            \`<div class="tooltip">
+              <span style="background: var(--success-color); color: white; padding: 2px 6px; border-radius: 4px; font-size: 12px; font-weight: 600;">\${result.responseTime}ms</span>
+              <span class="tooltiptext">该延迟并非 您当前网络 到 ProxyIP 的实际延迟，<br>而是 Cloudflare\${result.colo || 'CF'}机房到 ProxyIP 的响应时间。</span>
+            </div>\` : 
+            '<span style="color: var(--text-light); font-size: 12px;">延迟未知</span>';
+            
+          statusIcon.innerHTML = responseTimeHTML;
           statusIcon.className = 'status-icon status-success';
         } else {
           itemElement.style.background = 'linear-gradient(135deg, #f8d7da, #f5c6cb)';
@@ -1556,7 +1663,7 @@ curl "https://${hostname}/check?proxyip=1.2.3.4:443"
         }
         // 将失败结果也缓存起来
         const cacheKey = \`\${ip}:\${port}\`;
-        ipCheckResults.set(cacheKey, { success: false, error: error.message });
+        ipCheckResults.set(cacheKey, { success: false, error: error.message, colo: 'CF' });
       }
     }
     
