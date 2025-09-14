@@ -307,7 +307,7 @@ async function CheckProxyIP(proxyIP, colo = 'CF') {
 
     const isSuccessful = isValidProxyResponse(responseText, responseData);
     if (isSuccessful) {
-      console.log(`成功通过ProxyIP ${proxyIP}:${portRemote} 连接到Cloudflare，状态码: ${statusCode}`);
+      console.log(`成功通过ProxyIP ${proxyIP}:${portRemote} 连接到Cloudflare，状态码: ${statusCode} 响应内容: ${responseText}`);
       const tls握手 = await 验证反代IP(proxyIP, portRemote);
 
       // 构建JSON响应
