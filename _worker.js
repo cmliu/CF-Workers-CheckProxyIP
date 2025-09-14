@@ -296,8 +296,8 @@ async function CheckProxyIP(proxyIP, colo = 'CF') {
     function isValidProxyResponse(responseText, responseData) {
       const statusMatch = responseText.match(/^HTTP\/\d\.\d\s+(\d+)/i);
       const statusCode = statusMatch ? parseInt(statusMatch[1]) : null;
-      const looksLikeCloudflare = responseText.includes("cloudflare");
-      const isExpectedError = responseText.includes("plain HTTP request") || responseText.includes("400 Bad Request");
+      const looksLikeCloudflare = responseText.includes("cloudflare") && responseText.includes("CF-RAY");
+      const isExpectedError = responseText.includes("The plain HTTP request was sent to HTTPS port") && responseText.includes("400 Bad Request");
       const hasBody = responseData.length > 100;
 
       return statusCode !== null && looksLikeCloudflare && isExpectedError && hasBody;
