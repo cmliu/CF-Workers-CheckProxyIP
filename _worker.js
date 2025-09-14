@@ -322,7 +322,7 @@ async function CheckProxyIP(proxyIP, colo = 'CF') {
       };
       return jsonResponse;
     } else {
-      console.log(`无法通过ProxyIP ${proxyIP}:${portRemote} 访问Cloudflare，状态码: ${statusCode}`);
+      console.log(`无法通过ProxyIP ${proxyIP}:${portRemote} 访问Cloudflare，状态码: ${statusCode} 响应内容: ${responseText}`);
       return {
         success: false,
         proxyIP: proxyIP,
