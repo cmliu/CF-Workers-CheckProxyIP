@@ -442,7 +442,7 @@ function generateHTML(备案内容) {
 		.result-item,
 		.status-badge,
 		.meta-chip,
-		.exit-ip-btn,
+		.exit-ip-card,
 		.map-container-wrapper,
 		.theme-toggle {
 			transition: background 0.28s ease, border-color 0.28s ease, color 0.28s ease, box-shadow 0.28s ease, opacity 0.28s ease;
@@ -2047,27 +2047,111 @@ function generateHTML(备案内容) {
 			font-size: 0.84rem;
 		}
 
-		.exit-ip-btn {
+		.exit-ip-card {
+			position: relative;
+			display: inline-flex;
+			align-items: center;
+			gap: 10px;
+			padding: 8px 12px 8px 14px;
 			border: 1px solid rgba(52, 211, 153, 0.22);
 			border-radius: 999px;
-			padding: 10px 14px;
 			background: linear-gradient(135deg, rgba(52, 211, 153, 0.14), rgba(97, 219, 255, 0.08));
 			color: var(--text);
 			font-weight: 700;
-			cursor: pointer;
-			transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+			cursor: default;
+			transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
 		}
 
-		.exit-ip-btn:hover {
+		.exit-ip-card:hover {
 			transform: translateY(-1px);
 			border-color: rgba(97, 219, 255, 0.32);
 			background: linear-gradient(135deg, rgba(52, 211, 153, 0.18), rgba(97, 219, 255, 0.12));
 		}
 
-		.exit-ip-btn.is-active {
+		.exit-ip-card.is-active {
 			border-color: rgba(97, 219, 255, 0.52);
 			background: linear-gradient(135deg, rgba(97, 219, 255, 0.26), rgba(52, 211, 153, 0.16));
 			box-shadow: inset 0 0 0 1px rgba(97, 219, 255, 0.14), 0 0 0 1px rgba(97, 219, 255, 0.1);
+		}
+
+		.exit-ip-card.is-copied {
+			border-color: rgba(97, 219, 255, 0.6);
+			background: linear-gradient(135deg, rgba(97, 219, 255, 0.22), rgba(52, 211, 153, 0.14));
+		}
+
+		.exit-ip-copy {
+			border: 0;
+			background: transparent;
+			padding: 0;
+			margin: 0;
+			color: var(--text);
+			font-family: 'Space Grotesk', 'Plus Jakarta Sans', monospace;
+			font-size: 1.05rem;
+			font-weight: 700;
+			word-break: break-word;
+			text-align: left;
+			cursor: pointer;
+			transition: color 0.18s ease, text-shadow 0.18s ease;
+		}
+
+		.exit-ip-copy:hover,
+		.exit-ip-copy:focus-visible {
+			color: #8be9ff;
+			text-shadow: 0 0 18px rgba(97, 219, 255, 0.28);
+		}
+
+		.exit-ip-copy:focus-visible {
+			outline: 2px solid rgba(97, 219, 255, 0.48);
+			outline-offset: 3px;
+			border-radius: 6px;
+		}
+
+		.exit-ip-card.is-copied .exit-ip-copy {
+			color: #8be9ff;
+		}
+
+		.exit-ip-detail-toggle {
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			flex: 0 0 auto;
+			width: 22px;
+			height: 22px;
+			border: 0;
+			border-radius: 50%;
+			padding: 0;
+			margin: 0;
+			background: rgba(255, 255, 255, 0.06);
+			color: var(--muted);
+			cursor: pointer;
+			transition: color 0.18s ease, background 0.18s ease;
+		}
+
+		.exit-ip-detail-toggle svg {
+			display: block;
+			width: 13px;
+			height: 13px;
+			transition: transform 0.22s ease;
+		}
+
+		.exit-ip-detail-toggle:hover,
+		.exit-ip-detail-toggle:focus-visible {
+			color: #8be9ff;
+			background: rgba(97, 219, 255, 0.16);
+		}
+
+		.exit-ip-detail-toggle:focus-visible {
+			outline: 2px solid rgba(97, 219, 255, 0.48);
+			outline-offset: 3px;
+		}
+
+		.exit-ip-card.is-active .exit-ip-detail-toggle {
+			color: #8be9ff;
+			background: rgba(97, 219, 255, 0.18);
+		}
+
+		.exit-ip-card.is-active .exit-ip-detail-toggle svg {
+			transform: rotate(180deg);
 		}
 
 		.map-container-wrapper {
@@ -2560,21 +2644,50 @@ function generateHTML(备案内容) {
 			color: #be123c;
 		}
 
-		html[data-theme='light'] .exit-ip-btn {
+		html[data-theme='light'] .exit-ip-card {
 			border-color: rgba(5, 150, 105, 0.18);
 			background: linear-gradient(135deg, rgba(5, 150, 105, 0.08), rgba(14, 165, 233, 0.08));
 			color: #17324a;
 		}
 
-		html[data-theme='light'] .exit-ip-btn:hover {
+		html[data-theme='light'] .exit-ip-card:hover {
 			border-color: rgba(14, 165, 233, 0.24);
 			background: linear-gradient(135deg, rgba(5, 150, 105, 0.12), rgba(14, 165, 233, 0.12));
 		}
 
-		html[data-theme='light'] .exit-ip-btn.is-active {
+		html[data-theme='light'] .exit-ip-card.is-active {
 			border-color: rgba(14, 165, 233, 0.32);
 			background: linear-gradient(135deg, rgba(14, 165, 233, 0.18), rgba(5, 150, 105, 0.12));
 			box-shadow: inset 0 0 0 1px rgba(14, 165, 233, 0.1), 0 0 0 1px rgba(14, 165, 233, 0.08);
+		}
+
+		html[data-theme='light'] .exit-ip-copy {
+			color: #17324a;
+		}
+
+		html[data-theme='light'] .exit-ip-copy:hover,
+		html[data-theme='light'] .exit-ip-copy:focus-visible {
+			color: #0b7fb5;
+		}
+
+		html[data-theme='light'] .exit-ip-card.is-copied .exit-ip-copy {
+			color: #0b7fb5;
+		}
+
+		html[data-theme='light'] .exit-ip-detail-toggle {
+			background: rgba(23, 50, 74, 0.06);
+			color: rgba(23, 50, 74, 0.62);
+		}
+
+		html[data-theme='light'] .exit-ip-detail-toggle:hover,
+		html[data-theme='light'] .exit-ip-detail-toggle:focus-visible {
+			color: #0b7fb5;
+			background: rgba(14, 165, 233, 0.14);
+		}
+
+		html[data-theme='light'] .exit-ip-card.is-active .exit-ip-detail-toggle {
+			color: #0b7fb5;
+			background: rgba(14, 165, 233, 0.16);
 		}
 
 		html[data-theme='light'] #global-map {
@@ -2685,10 +2798,18 @@ function generateHTML(备案内容) {
 		}
 
 		@media (max-width: 560px) {
-			.meta-chip,
-			.exit-ip-btn {
+			.meta-chip {
 				width: 100%;
 				justify-content: center;
+			}
+
+			.exit-ip-card {
+				width: 100%;
+				justify-content: space-between;
+			}
+
+			.exit-ip-copy {
+				text-align: left;
 			}
 
 			.filter-row-label,
@@ -4105,7 +4226,7 @@ function generateHTML(备案内容) {
 			} else if (appState === 'done') {
 				headline = '检测完成';
 				description = '有效 ' + successCount + ' / ' + totalTargets + '，失败 ' + failCount + '。';
-				meta = '本轮检测已结束，点击落地 IP 可展开地图详情。';
+				meta = '本轮检测已结束，点击落地 IP 可一键复制，点击右侧箭头查看出口位置和网络信息。';
 				pillText = 'Completed';
 			} else if (appState === 'empty') {
 				headline = '未解析到可检测目标';
@@ -4934,6 +5055,31 @@ function generateHTML(备案内容) {
 			].join('|');
 		}
 
+		function buildExitDetailToggleIcon() {
+			return '<svg viewBox="0 0 12 12" fill="none" aria-hidden="true" focusable="false">' +
+				'<path d="M2.5 4.25L6 7.75L9.5 4.25" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>' +
+				'</svg>';
+		}
+
+		async function copyExitIp(card, rawIp) {
+			const value = String(rawIp || '').trim();
+			if (!value) {
+				return;
+			}
+
+			try {
+				await writeTextToClipboard(value);
+				showToast('已复制落地 IP：' + value);
+				card.classList.add('is-copied');
+				window.setTimeout(function () {
+					card.classList.remove('is-copied');
+				}, 1200);
+			} catch (error) {
+				console.error('Failed to copy exit IP', error);
+				showToast('复制失败，请检查浏览器权限', 'error');
+			}
+		}
+
 		function renderExitList(container, exitIps) {
 			container.innerHTML = '';
 
@@ -4951,15 +5097,34 @@ function generateHTML(备案内容) {
 			container.appendChild(label);
 
 			exitIps.forEach(function (entry) {
-				const button = document.createElement('button');
-				button.type = 'button';
-				button.className = 'exit-ip-btn';
-				button.innerText = entry.ip;
-				button.dataset.exitKey = getExitSelectionKey(entry.exitData, entry.ip);
-				button.addEventListener('click', function () {
-					showDetails(button, entry.exitData);
+				const card = document.createElement('div');
+				card.className = 'exit-ip-card';
+				card.dataset.exitKey = getExitSelectionKey(entry.exitData, entry.ip);
+
+				const copyButton = document.createElement('button');
+				copyButton.type = 'button';
+				copyButton.className = 'exit-ip-copy';
+				copyButton.innerText = entry.ip;
+				copyButton.title = '点击复制 IP';
+				copyButton.setAttribute('aria-label', '复制落地 IP ' + entry.ip);
+				copyButton.addEventListener('click', function () {
+					copyExitIp(card, entry.ip);
 				});
-				container.appendChild(button);
+
+				const detailToggle = document.createElement('button');
+				detailToggle.type = 'button';
+				detailToggle.className = 'exit-ip-detail-toggle';
+				detailToggle.title = '展开 / 收起 IP 详情';
+				detailToggle.setAttribute('aria-label', '展开或收起落地 IP ' + entry.ip + ' 的详细信息');
+				detailToggle.setAttribute('aria-expanded', 'false');
+				detailToggle.innerHTML = buildExitDetailToggleIcon();
+				detailToggle.addEventListener('click', function () {
+					showDetails(card, entry.exitData);
+				});
+
+				card.appendChild(copyButton);
+				card.appendChild(detailToggle);
+				container.appendChild(card);
 			});
 		}
 
@@ -5105,13 +5270,14 @@ function generateHTML(备案内容) {
 			updateResultFilters();
 		}
 
-		async function showDetails(button, exitData) {
-			const item = button.closest('.result-item');
+		async function showDetails(card, exitData) {
+			const item = card.closest('.result-item');
 			const container = item.querySelector('.map-container-wrapper');
 			const isOpen = container.style.display === 'block';
-			const nextSelectionKey = button.dataset.exitKey || getExitSelectionKey(exitData);
+			const nextSelectionKey = card.dataset.exitKey || getExitSelectionKey(exitData);
 			const isSameSelection = isOpen && container.dataset.activeExitKey === nextSelectionKey;
 			const currentToken = ++mapRenderToken;
+			const toggle = card.querySelector('.exit-ip-detail-toggle');
 
 			document.querySelectorAll('.map-container-wrapper').forEach(function (panel) {
 				if (panel !== container) {
@@ -5119,18 +5285,28 @@ function generateHTML(备案内容) {
 					panel.dataset.activeExitKey = '';
 				}
 			});
-			document.querySelectorAll('.exit-ip-btn.is-active').forEach(function (activeButton) {
-				activeButton.classList.remove('is-active');
+			document.querySelectorAll('.exit-ip-card.is-active').forEach(function (activeCard) {
+				activeCard.classList.remove('is-active');
+				const activeToggle = activeCard.querySelector('.exit-ip-detail-toggle');
+				if (activeToggle) {
+					activeToggle.setAttribute('aria-expanded', 'false');
+				}
 			});
 
 			if (isSameSelection) {
 				container.style.display = 'none';
 				container.dataset.activeExitKey = '';
+				if (toggle) {
+					toggle.setAttribute('aria-expanded', 'false');
+				}
 				return;
 			}
 
 			container.dataset.activeExitKey = nextSelectionKey;
-			button.classList.add('is-active');
+			card.classList.add('is-active');
+			if (toggle) {
+				toggle.setAttribute('aria-expanded', 'true');
+			}
 			initMap();
 			container.appendChild(globalMap);
 			container.style.display = 'block';
