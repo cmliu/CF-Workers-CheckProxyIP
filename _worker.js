@@ -26,10 +26,35 @@ const DEFAULT_BEIAN_CONTENT = `© 2025 - 2026 Check ProxyIP · 基于 <a href="h
 })();
 </script>`;
 const RESOLVE_BATCH_LIMIT = 15;
+
+// 把 env.API_HOST 归一化成 scheme://host[:port]，用于前端 /check 与 /cdn-cgi/trace 的请求地址。
+// 未配置（undefined/空串/纯空格）时回退页面当前源，保留 scheme 与端口（wrangler dev 可用）；
+// 带 scheme 则保留，否则默认 https；只接受 http/https。
+// 宿主名还需通过白名单：WHATWG URL 会接受 a'+(...)+' 这类含单引号的宿主名，
+// 直接拼进内联脚本单引号字符串会破坏语法，所以必须显式收紧。
+function resolveApiBase(value, requestUrl) {
+	const fallback = requestUrl.origin;
+	const raw = typeof value === 'string' ? value.trim() : '';
+	if (!raw) return fallback;
+
+	try {
+		const parsed = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(raw) ? raw : 'https://' + raw);
+		const hostOk = /^(?:\[[0-9a-fA-F:.]+\]|[A-Za-z0-9._-]+)$/.test(parsed.hostname);
+		if (!/^https?:$/.test(parsed.protocol) || !hostOk) throw new Error('invalid host or scheme');
+		if (parsed.pathname !== '/') console.warn('[API_HOST] 路径前缀不支持，已忽略：', parsed.pathname);
+		return parsed.origin;
+	} catch (error) {
+		console.warn('[API_HOST] 非法值，已回退为页面同源：', raw, error.message);
+		return fallback;
+	}
+}
+
 export default {
 	async fetch(request, env) {
 		const 备案内容 = env.BEIAN ?? DEFAULT_BEIAN_CONTENT;
 		const url = new URL(request.url);
+		// 仅用于前端 `/check` 与 `/cdn-cgi/trace` 的请求基地址，其它接口保持页面同源相对路径。
+		const apiBase = resolveApiBase(env.API_HOST, url);
 
 		if (url.pathname === '/check') {
 			return handleCheckProxyRequest(request);
@@ -59,7 +84,7 @@ export default {
 		} else if (url.pathname === '/resolve-batch') {
 			return handleResolveBatchRequest(request);
 		} else if (url.pathname === '/locations') return fetch(new Request('https://speed.cloudflare.com/locations', { headers: { 'Referer': 'https://speed.cloudflare.com/' } }));
-		return new Response(generateHTML(备案内容), {
+		return new Response(generateHTML(备案内容, apiBase), {
 			headers: { 'Content-Type': 'text/html; charset=UTF-8' }
 		});
 	}
@@ -285,7 +310,7 @@ async function dohQuery(name, type, endpoint = 'https://cloudflare-dns.com/dns-q
 	}
 }
 
-function generateHTML(备案内容) {
+function generateHTML(备案内容, apiBase) {
 	return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -3160,6 +3185,8 @@ function generateHTML(备案内容) {
 
 	<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 	<script>
+		// 接口基地址：用于 /check 与 /cdn-cgi/trace，未配置 API_HOST 时默认同源（含 scheme 与端口）。
+		const API_BASE = '${apiBase}';
 		const checkBtn = document.getElementById('checkBtn');
 		let inputList = document.getElementById('inputList');
 		const inputContainer = document.getElementById('inputContainer');
@@ -3444,7 +3471,7 @@ function generateHTML(备案内容) {
 
 			backendServicePromise = Promise.all([
 				loadCfLocations(),
-				fetchTextWithTimeout('https://api.090227.xyz/cdn-cgi/trace', { cache: 'no-store' }, 8000)
+				fetchTextWithTimeout(API_BASE + '/cdn-cgi/trace', { cache: 'no-store' }, 8000)
 			]).then(function (results) {
 				const traceResult = results[1];
 				const payload = parseTracePayload(traceResult?.payload);
@@ -5171,7 +5198,7 @@ function generateHTML(备案内容) {
 			const resultRecord = itemObj.record;
 
 			try {
-				const result = await fetchJsonWithTimeout('/check?proxyip=' + encodeURIComponent(target), {}, 30000, run?.controller.signal);
+				const result = await fetchJsonWithTimeout(API_BASE + '/check?proxyip=' + encodeURIComponent(target), {}, 30000, run?.controller.signal);
 				const data = result.payload || {
 					success: false,
 					message: '检测接口没有返回有效 JSON'

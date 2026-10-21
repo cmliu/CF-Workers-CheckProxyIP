@@ -27,7 +27,7 @@
 这意味着：
 
 - 你部署本项目后，可以立即得到一个可用的检测页面
-- 页面中的“检测”动作会直接请求同源 `/check`
+- 页面中的“检测”动作默认请求同源 `/check`，也可以通过环境变量 `API_HOST` 指向另一个域名
 - 检测逻辑已从 `demo/Check_Proxy.js` 移植进 `_worker.js`
 - `/check` 会访问 `ipv4.090227.xyz` 和 `ipv6.090227.xyz` 作为出口探针，用于判断候选 ProxyIP 的 IPv4 / IPv6 出口能力
 
@@ -38,6 +38,7 @@
 | 变量名 | 说明 | 示例 | 必需 |
 | --- | --- | --- | --- |
 | `BEIAN` | 自定义页面页脚 HTML。未设置时使用默认页脚，包含项目链接、访问人数和维护者链接。 | `© 2026 Example.com · ICP 备案号` | 否 |
+| `API_HOST` | 可选。让页面上的 `/check` 与 `/cdn-cgi/trace` 改走指定域名，只写主机名（可带端口）。未设置时使用页面自身域名。 | `api.example.com`、`api.example.com:8443` | 否 |
 
 ## 功能特性
 
@@ -94,7 +95,11 @@
   ├─ 访问 Worker 首页 /
   ├─ 调用 /resolve 或 /resolve-batch 解析输入目标
   ├─ 调用 /locations 获取 Cloudflare 机房位置
-  └─ 调用同源 /check 检测候选 ProxyIP
+  └─ 调用 /check 检测候选 ProxyIP
+
+接口基地址（API_BASE）
+  └─ /check 与 /cdn-cgi/trace 使用
+     默认页面同源，设置 API_HOST 后指向该地址
 
 Cloudflare Worker
   ├─ 返回 HTML / CSS / JS 页面
@@ -213,7 +218,7 @@ Cloudflare Worker
 
 ### `GET /check?proxyip=...`
 
-检测候选 ProxyIP 是否可用。前端检测按钮现在调用的就是这个同源接口。
+检测候选 ProxyIP 是否可用。前端检测按钮调用的就是这个接口：默认走页面同源，设置 `API_HOST` 后改为请求该地址。
 
 #### 请求参数
 
@@ -363,11 +368,13 @@ https://your-worker.example.workers.dev/8.223.63.150:443
 
 ## 关于 `/check` 检测接口
 
-前端真正执行检测时，调用的是同源接口：
+前端真正执行检测时，请求的是下面这个接口：
 
 ```text
-/check?proxyip=<target>
+<API_BASE>/check?proxyip=<target>
 ```
+
+其中 `API_BASE` 由后端在渲染页面时写入内联脚本：默认是页面当前源，设置环境变量 `API_HOST` 后改为该地址。
 
 这个接口的实现已经内置在 [`_worker.js`](./_worker.js) 中，主要使用 `cloudflare:sockets` 连接候选 ProxyIP，再通过固定探针目标判断出口能力。页面当前主要使用它返回的这些字段：
 
@@ -429,13 +436,13 @@ https://your-worker.example.workers.dev/8.223.63.150:443
 
 ### 1. 调整检测接口或探针目标
 
-当前前端函数 `checkIP()` 请求同源接口：
+当前前端函数 `checkIP()` 请求的地址由常量 `API_BASE` 拼出：
 
 ```js
-/check?proxyip=
+API_BASE + '/check?proxyip='
 ```
 
-如果你想替换为自己的后端服务，可以改这里；如果只是想换出口探针目标，优先调整 `_worker.js` 中的 `PROBE_TARGETS`。
+`API_BASE` 在页面渲染时写入，默认等于页面当前源 `location.origin`，可通过环境变量 `API_HOST` 改指向其它域名。如果只是想换出口探针目标，优先调整 `_worker.js` 中的 `PROBE_TARGETS`。
 
 ### 2. 替换 DNS 解析服务
 
@@ -459,6 +466,7 @@ https://cloudflare-dns.com/dns-query
 - `/resolve` 只负责解析候选目标，不负责真正的网络可用性验证
 - `/check` 检测过程依赖 `ipv4.090227.xyz` 和 `ipv6.090227.xyz` 探针目标可用
 - 如果第三方地图、字体、旗帜资源被阻断，页面部分视觉元素可能无法正常显示
+- `API_HOST` 指向页面之外的域名时，`/check` 与 `/cdn-cgi/trace` 会变成跨域请求（两者都带 `ACAO: *`）；`/cdn-cgi/trace` 需该域名由 Cloudflare 代理，否则机房卡片降级
 - 批量检测时会对候选目标以最多 32 个并发请求执行检测，目标很多时仍可能触发 Worker 运行时、子请求或网络资源限制
 - 当前仓库没有内置鉴权、配额控制和管理后台
 
