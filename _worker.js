@@ -5698,6 +5698,228 @@ const PROBE_TARGETS = [
 	),
 }));
 
+// ==================== 证书主机名校验（零依赖，只做一条判定）====================
+// 背景：部分反代 IP 在握手时返回的是「另一个站点」的证书（反代方强制指定了证书 / SNI 路由），
+// 这类地址真实客户端必须开 allow insecure 才能用，却会被误判成可用。
+//
+// 这里只做一条判定：叶子证书的 SAN（无 SAN 时回退 subject.CN）是否与握手使用的 serverName 匹配。
+// 故意不校验：有效期（探针域名 ipv4/ipv6.090227.xyz 的证书本身可能尚未生效 / 已过期，
+// 纳入判定会把「其实是好的反代 IP」误杀）、自签、证书链 / 签名 / CT / OCSP。
+// 解析不出来时一律放行，保证不新增误杀。
+const TLS_CERTIFICATE_MESSAGE_TYPE = 11;
+const X509_OID_COMMON_NAME = '550403';
+const X509_OID_SUBJECT_ALT_NAME = '551d11';
+const X509_DECODER = new TextDecoder();
+
+// 读取一个 DER TLV（只支持定长编码，RFC 5280 要求 DER 必须定长）
+function readDerTlv(buf, offset) {
+	if (!buf || offset < 0 || offset + 2 > buf.length) return null;
+	const tag = buf[offset];
+	let pos = offset + 1;
+	let length = buf[pos++];
+	if (length & 0x80) {
+		const count = length & 0x7f;
+		if (!count || count > 4 || pos + count > buf.length) return null;
+		length = 0;
+		for (let i = 0; i < count; i++) length = length * 256 + buf[pos++];
+	}
+	if (pos + length > buf.length) return null;
+	return { tag, start: pos, end: pos + length, value: buf.subarray(pos, pos + length) };
+}
+
+// 列出一个 constructed TLV 的直接子节点
+function listDerChildren(buf, tlv) {
+	const children = [];
+	if (!tlv) return children;
+	let offset = tlv.start;
+	while (offset < tlv.end) {
+		const child = readDerTlv(buf, offset);
+		if (!child || child.end <= offset) break;
+		children.push(child);
+		offset = child.end;
+	}
+	return children;
+}
+
+function derOidHex(bytes) {
+	let hex = '';
+	for (const byte of bytes) hex += byte.toString(16).padStart(2, '0');
+	return hex;
+}
+
+function decodeDerText(bytes) {
+	try {
+		return X509_DECODER.decode(bytes).replace(/\u0000+$/g, '').trim();
+	} catch {
+		let text = '';
+		for (const byte of bytes) text += String.fromCharCode(byte);
+		return text.trim();
+	}
+}
+
+// 取 X.509 Name（DN）里的第一个 CN
+function parseX509CommonName(buf, nameTlv) {
+	for (const rdnSet of listDerChildren(buf, nameTlv)) {
+		if (rdnSet.tag !== 0x31) continue; // SET
+		for (const attributeTypeAndValue of listDerChildren(buf, rdnSet)) {
+			if (attributeTypeAndValue.tag !== 0x30) continue; // SEQUENCE { type, value }
+			const parts = listDerChildren(buf, attributeTypeAndValue);
+			if (parts.length < 2) continue;
+			if (derOidHex(parts[0].value) !== X509_OID_COMMON_NAME) continue;
+			const commonName = decodeDerText(parts[1].value);
+			if (commonName) return commonName;
+		}
+	}
+	return '';
+}
+
+// 严格解析一张 X.509 证书，只取 subject.CN 与 SAN 里的 dNSName；
+// 结构不合规一律返回 null（避免把随机字节误判成证书）
+function parseX509Certificate(buf, offset) {
+	const root = readDerTlv(buf, offset);
+	if (!root || root.tag !== 0x30) return null;
+	const certificate = listDerChildren(buf, root);
+	if (certificate.length < 3) return null;
+	if (certificate[0].tag !== 0x30 || certificate[1].tag !== 0x30 || certificate[2].tag !== 0x03) return null;
+
+	const tbs = listDerChildren(buf, certificate[0]);
+	if (tbs.length < 6) return null;
+	let index = 0;
+	if (tbs[index].tag === 0xa0) index += 1; // [0] version（可选）
+	if (!tbs[index] || tbs[index].tag !== 0x02) return null; // serialNumber
+	index += 1;
+	if (!tbs[index] || tbs[index].tag !== 0x30) return null; // signature
+	index += 1;
+	const issuerTlv = tbs[index++];
+	const validityTlv = tbs[index++];
+	const subjectTlv = tbs[index++];
+	const spkiTlv = tbs[index++];
+	if (!issuerTlv || !validityTlv || !subjectTlv || !spkiTlv) return null;
+	if (issuerTlv.tag !== 0x30 || validityTlv.tag !== 0x30 || subjectTlv.tag !== 0x30 || spkiTlv.tag !== 0x30) return null;
+	// 有效期字段只做结构占位校验，时间本身不参与判定
+	if (listDerChildren(buf, validityTlv).length < 2) return null;
+
+	const certificateInfo = {
+		commonName: parseX509CommonName(buf, subjectTlv),
+		dnsNames: [],
+	};
+
+	for (let i = index; i < tbs.length; i++) {
+		if (tbs[i].tag !== 0xa3) continue; // [3] extensions
+		const extensionList = listDerChildren(buf, tbs[i])[0];
+		if (!extensionList) continue;
+		for (const extension of listDerChildren(buf, extensionList)) {
+			if (extension.tag !== 0x30) continue;
+			const fields = listDerChildren(buf, extension);
+			if (fields.length < 2) continue;
+			if (derOidHex(fields[0].value) !== X509_OID_SUBJECT_ALT_NAME) continue;
+			const extensionValue = fields[fields.length - 1];
+			if (extensionValue.tag !== 0x04) continue; // OCTET STRING
+			const generalNames = readDerTlv(extensionValue.value, 0);
+			if (!generalNames || generalNames.tag !== 0x30) continue;
+			for (const generalName of listDerChildren(extensionValue.value, generalNames)) {
+				if (generalName.tag !== 0x82) continue; // dNSName
+				const dnsName = decodeDerText(generalName.value);
+				if (dnsName) certificateInfo.dnsNames.push(dnsName);
+			}
+		}
+	}
+
+	// 至少要能读出一个可用名字，否则视为解析失败
+	if (!certificateInfo.commonName && !certificateInfo.dnsNames.length) return null;
+	return certificateInfo;
+}
+
+// 从 TLS 握手 Certificate 消息（type=11）的消息体里取第一张（叶子）证书：
+// TLS1.3: context_len(1B) + context + cert_list_len(3B) + [cert_len(3B) + DER]...
+// TLS1.2: cert_list_len(3B) + [cert_len(3B) + DER]...
+function parseTlsCertificateMessage(body, isTls13) {
+	if (!body || body.length < 8) return null;
+	const listOffset = isTls13 ? 1 + body[0] : 0;
+	if (listOffset + 6 > body.length) return null;
+	const listLength = (body[listOffset] << 16) | (body[listOffset + 1] << 8) | body[listOffset + 2];
+	const certLength = (body[listOffset + 3] << 16) | (body[listOffset + 4] << 8) | body[listOffset + 5];
+	const certOffset = listOffset + 6;
+	if (!listLength || !certLength || certOffset + certLength > body.length) return null;
+	return parseX509Certificate(body, certOffset);
+}
+
+function normalizeHostName(raw) {
+	return String(raw ?? '')
+		.trim()
+		.toLowerCase()
+		.replace(/\.+$/, '');
+}
+
+// serverName 是 IP 字面量时，证书用的是 iPAddress 而不是 dNSName，不在本校验范围内
+function isIpLiteralHost(host) {
+	return /^\d{1,3}(?:\.\d{1,3}){3}$/.test(host) || host.includes(':');
+}
+
+// 通配符只覆盖一个 label：*.example.com 匹配 a.example.com，不匹配 a.b.example.com / example.com
+function hostNameMatchesPattern(host, pattern) {
+	const candidate = normalizeHostName(pattern);
+	if (!candidate) return false;
+	if (candidate === host) return true;
+	if (!candidate.startsWith('*.')) return false;
+	const suffix = candidate.slice(1); // 含前导点的后缀
+	if (!host.endsWith(suffix)) return false;
+	const label = host.slice(0, host.length - suffix.length);
+	return Boolean(label) && !label.includes('.');
+}
+
+function certificateMatchesHost(certificate, serverName) {
+	if (!certificate) return true;
+	const host = normalizeHostName(serverName);
+	if (!host || isIpLiteralHost(host)) return true;
+
+	const patterns = certificate.dnsNames.slice();
+	// 无 SAN 时回退到 subject.CN；只接受「看起来像主机名」的 CN，避免把编码错乱的字节当域名误判
+	if (!patterns.length && /^[a-z0-9*._-]+$/i.test(certificate.commonName)) patterns.push(certificate.commonName);
+	if (!patterns.length) return true;
+
+	return patterns.some((pattern) => hostNameMatchesPattern(host, pattern));
+}
+
+function describeCertificateNames(certificate) {
+	const names = certificate.dnsNames.slice();
+	if (!names.length && certificate.commonName) names.push(certificate.commonName);
+	return names.length ? names.join(', ') : '无';
+}
+
+// 只覆写 acceptCertificate，压缩版 TlsClient 一个字符都不用改。
+// 注意：acceptCertificate 的入参是错位切片（TLS1.3 分支调用 le() 时没跳过 certificate_request_context），
+// 不是合法 DER，所以真正的证书要从握手解析器截获的 Certificate 消息体里取。
+class CertificateCheckingTlsClient extends TlsClient {
+	constructor(socket, options = {}) {
+		super(socket, options);
+		this.certificateMessageBody = null;
+
+		const parser = this.handshakeParser;
+		if (parser && typeof parser.next === 'function') {
+			const originalNext = parser.next.bind(parser);
+			parser.next = () => {
+				const message = originalNext();
+				if (message && message.type === TLS_CERTIFICATE_MESSAGE_TYPE && message.body) {
+					this.certificateMessageBody = message.body;
+				}
+				return message;
+			};
+		}
+	}
+
+	async acceptCertificate(certificate) {
+		await super.acceptCertificate(certificate);
+
+		const leaf = parseTlsCertificateMessage(this.certificateMessageBody, this.isTls13 === true);
+		if (!leaf) return; // 解析不出来就放行：本校验只拦「明显不匹配」，不新增误杀
+		if (certificateMatchesHost(leaf, this.serverName)) return;
+
+		const serverName = this.serverName;
+		throw new Error(`证书与 ${serverName} 不匹配（证书 SAN/CN: ${describeCertificateNames(leaf)}）`);
+	}
+}
+
 function parsePositiveInt(value, fallback) {
 	const parsed = Number.parseInt(`${value ?? ''}`, 10);
 	return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
@@ -5855,7 +6077,8 @@ async function handleCheckProxyRequest(req) {
 							connectMs = Date.now() - startedAt;
 
 							startedAt = Date.now();
-							tlsClient = new TlsClient(socket, { serverName: target.host, timeout: timeoutMs });
+							// 握手阶段校验叶子证书是否与 serverName 匹配（挡住「反代方强制指定了别的站点证书」的节点）
+							tlsClient = new CertificateCheckingTlsClient(socket, { serverName: target.host, timeout: timeoutMs });
 							await withTimeout(tlsClient.handshake(), timeoutMs, 'tls handshake');
 							tlsMs = Date.now() - startedAt;
 
